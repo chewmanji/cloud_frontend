@@ -1,5 +1,3 @@
-ARG BACKEND_URL
-
 FROM node:22-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -19,7 +17,8 @@ RUN npm run build
 
 #Prod stage
 FROM prod-deps
-ENV PUBLIC_API_BASE_URL=$BACKEND_URL
+ARG BACKEND_URL
+ENV PUBLIC_API_BASE_URL=${BACKEND_URL}
 ENV HOST="0.0.0.0"
 ENV PORT="5173"
 COPY --from=build /app/build ./build
