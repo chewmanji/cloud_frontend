@@ -23,4 +23,6 @@ ENV HOST="0.0.0.0"
 ENV PORT="5173"
 COPY --from=build /app/build ./build
 
+EXPOSE 5173
+
 CMD ["node", "build"]
