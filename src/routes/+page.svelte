@@ -62,31 +62,114 @@
 	afterUpdate(() => {
 		scrollToBottom();
 	});
+
+	async function handleFileDownload(message: Message) {
+		try {
+			const response = await api.get(`/chat/files/${message.message}`);
+
+			const presignedUrl: string = response.data;
+
+			console.log(`Presigned download link: ${presignedUrl}`);
+
+			const fileResponse = await fetch(presignedUrl, {
+				method: 'GET'
+			});
+
+			const data = await fileResponse.blob();
+			const downloadFileUrl = URL.createObjectURL(data);
+			const link = document.createElement('a');
+			link.href = downloadFileUrl;
+			link.download = message.message;
+			document.body.append(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(downloadFileUrl);
+		} catch (error) {
+			console.error('Error downloading file:', error);
+		}
+	}
+
+	let fileInput: HTMLInputElement;
+
+	async function handleFileSelect(event: Event & { currentTarget: HTMLInputElement }) {
+		const files = event.currentTarget.files;
+
+		if (files && files.length > 0) {
+			const file = files[0];
+			try {
+				const response = await api.post('/chat/files/presign', {
+					username,
+					filename: file.name,
+					contentType: file.type
+				});
+
+				const presignedUrl: string = response.data;
+
+				console.log(`Presigned upload link: ${presignedUrl}`);
+
+				await fetch(presignedUrl, {
+					method: 'PUT',
+					headers: { 'Content-Type': file.type },
+					body: file
+				});
+
+				await fetchAllMessages();
+				scrollToBottom();
+			} catch (error) {
+				console.error('Error uploading file:', error);
+			}
+		}
+	}
 </script>
 
-<div class="max-w-2xl mx-auto p-4">
+<div class="mx-auto max-w-2xl p-4">
 	<!-- Pole do zmiany nicku -->
 	<div class="mb-4 flex items-center">
-		<label for="username" class="font-semibold mr-2">Nickname:</label>
+		<label for="username" class="mr-2 font-semibold">Nickname:</label>
 		<input
 			id="username"
 			type="text"
 			autocomplete="off"
 			bind:value={username}
-			class="border border-gray-300 rounded px-3 py-2"
+			class="rounded border border-gray-300 px-3 py-2"
 			placeholder="Enter your nickname"
 		/>
 	</div>
 
-	<h1 class="text-2xl font-bold mb-4">Chat Room</h1>
+	<h1 class="mb-4 text-2xl font-bold">Chat Room</h1>
 
 	<!-- Kontener wiadomości z przypiętą referencją -->
-	<div class="border border-gray-300 rounded p-4 mb-4 h-80 overflow-y-auto" bind:this={chatContainer}>
+	<div
+		class="mb-4 h-80 overflow-y-auto rounded border border-gray-300 p-4"
+		bind:this={chatContainer}
+	>
 		{#each messages as msg (msg.timestamp)}
 			<div class="mb-2">
 				<span class="font-semibold">{msg.username}</span>
-				<span class="text-sm text-gray-500 ml-2">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-				<p>{msg.message}</p>
+				<span class="ml-2 text-sm text-gray-500"
+					>{new Date(msg.timestamp).toLocaleTimeString()}</span
+				>
+
+				{#if msg.isFile}
+					<div class="mt-1">
+						<button
+							on:click={() => handleFileDownload(msg)}
+							class="inline-flex cursor-pointer items-center text-blue-600 hover:text-blue-800 hover:underline"
+						>
+							<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+								/>
+							</svg>
+							📎 {msg.message}
+						</button>
+					</div>
+				{:else}
+					<p>{msg.message}</p>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -95,12 +178,28 @@
 		<input
 			type="text"
 			bind:value={newMessage}
-			class="flex-grow border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring"
+			class="flex-grow rounded border border-gray-300 px-3 py-2 focus:ring focus:outline-none"
 			placeholder="Type your message..."
 		/>
+		<input type="file" bind:this={fileInput} on:change={handleFileSelect} class="hidden" />
+		<button
+			on:click={() => fileInput.click()}
+			class="flex cursor-pointer items-center rounded bg-gray-500 px-4 py-2 font-semibold text-white hover:bg-gray-600"
+			title="Upload file"
+			aria-label="Upload file"
+		>
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-7.072 7.072A6 6 0 1010.808 21l8.486-8.486M7 9l4 4"
+				/>
+			</svg>
+		</button>
 		<button
 			on:click={sendMessage}
-			class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded"
+			class="cursor-pointer rounded bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-600"
 		>
 			Send
 		</button>
